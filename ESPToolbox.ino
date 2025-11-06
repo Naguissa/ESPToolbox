@@ -26,10 +26,6 @@ volatile int blinkPin = -1;
 volatile bool blinking = false;
 volatile bool blink_status = 0;
 
-String scanResults;
-volatile bool scanStart = false;
-volatile bool scanning = false;
-
 #ifdef ARDUINO_ARCH_ESP32
     #include <HTTPUpdateServer.h>
     WebServer server(80);
@@ -52,14 +48,17 @@ uRTCLib rtc;
 
 // ==================== Function definitions ====================
 void handleDefault();
+
 void handleConfig();
 void handleSaveConfig();
+
 void handleBlink();
 void handleBlinkoff();
+
 void handleI2cscan();
+
 void handleWifiScan();
-void handleWifiScanResult();
-void handleWifiScanResult();
+
 void handleRTCSet();
 void handleRTCGet();
 
@@ -70,7 +69,6 @@ void setup_timer();
 void setup();
 void loop();
 void blink_timed_function();
-void doWifiScan();
 
 // ==================== Debug functionality ====================
 void uDebugLibInit() {
@@ -120,55 +118,43 @@ void handleBlinkoff() {
 
 
 // ==================== WiFi scanner ====================
-void doWifiScan() {
-    scanResults.clear();
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
-    delay(100);
+void handleWifiScan() {
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text", "");
+    yield();
+    
     int n = WiFi.scanNetworks();
     if (n == 0) {
-        scanResults = "WiFi scanner: no networks found\n";
+        server.sendContent("\nNo networks found");
+        yield();
     } else {
-        scanResults = String(n, 10) + " networks found:\n";
         for (int i = 0; i < n; i++) {
-            scanResults += " - " + WiFi.SSID(i) + " - Channel: " + WiFi.channel(i) + " - RSSI: " + WiFi.RSSI(i) + " - Encription: ";
+            server.sendContent("\n" + WiFi.SSID(i) + " - Channel: " + WiFi.channel(i) + " - RSSI: " + WiFi.RSSI(i) + " - Encription: ");
+            yield();
             switch (WiFi.encryptionType(i)) {
-                case ENC_TYPE_WEP: scanResults += "WEP"; break;
-                case ENC_TYPE_TKIP: scanResults += "WPA/PSK"; break;
-                case ENC_TYPE_CCMP: scanResults += "WPA2/PSK"; break;
-                case ENC_TYPE_NONE: scanResults += "NONE"; break;
-                case ENC_TYPE_AUTO: scanResults += "AUTO (WPA/WPA2/PSK)"; break;
-                default: scanResults += "Unknown"; break;
+                #ifdef ARDUINO_ARCH_ESP32
+                    case WIFI_AUTH_OPEN: server.sendContent("None"); break;
+                    case WIFI_AUTH_WEP: server.sendContent("WEP"); break;
+                    case WIFI_AUTH_WPA_PSK: server.sendContent("WPA/PSK"); break;
+                    case WIFI_AUTH_WPA2_PSK: server.sendContent("WPA2/PSK"); break;
+                    case WIFI_AUTH_WPA_WPA2_PSK: server.sendContent("WPA+WPA2/PSK"); break;
+                    case WIFI_AUTH_WPA2_ENTERPRISE: server.sendContent("WPA2/EAP"); break;
+                    case WIFI_AUTH_WPA3_PSK: server.sendContent("WPA3/PSK"); break;
+                    case WIFI_AUTH_WPA2_WPA3_PSK: server.sendContent("WPA2+WPA3/PSK"); break;
+                    case WIFI_AUTH_WAPI_PSK: server.sendContent("WAPI"); break;
+                #else
+                    case ENC_TYPE_WEP: server.sendContent("WEP"); break;
+                    case ENC_TYPE_TKIP: server.sendContent("WPA/PSK"); break;
+                    case ENC_TYPE_CCMP: server.sendContent("WPA2/PSK"); break;
+                    case ENC_TYPE_NONE: server.sendContent("NONE"); break;
+                    case ENC_TYPE_AUTO: server.sendContent("WPA+WPA2/PSK"); break;
+                #endif
+                default: server.sendContent("Unknown"); break;
             }
             yield();
-            scanResults += "\n";
         }
     }
-    setup_wifi();
-    setup_web();
-    scanning = false;
-}
-
-void handleWifiScanResult() {
-    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    server.send(200, "text", "");
-    yield();
-    if (scanning)  {
-        server.sendContent("...scanning WiFi...");
-    } else {
-        server.sendContent(scanResults);
-    }
-
-
-}
-
-void handleWifiScan() {
-    scanning = true;
-    scanStart = true;
-    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    server.send(200, "text", "");
-    yield();
-    server.sendContent("WiFi scan started, waiting for results\n");
+    server.sendContent("\n\n  -- end --\n");
 }
 
 // ==================== I2C scanner ====================
@@ -329,7 +315,7 @@ void handleDefault() {
     yield();
     server.sendContent("<html><head><title>ESPToolbox</title>");
     yield();
-    server.sendContent("<script>\nfunction out(t) {var el=document.getElementById('app-output');el.innerText=(t+\"\\n----------\\n\"+el.innerText);};\nfunction get(uri,cb) {var xhr=new XMLHttpRequest();xhr.onreadystatechange=function(){if(xhr.readyState==4){if (xhr.status>=200 && xhr.status<300){cb(xhr.response+\"\\n\");}else{cb(\"ERROR ON LAST REQUEST\\n\");}}};xhr.responseType='text';xhr.timeout=1000;xhr.open(\"GET\", uri, true);xhr.send();}\nfunction wifiP(t) { var text = t.substring(0, 18);if (text == \"WiFi scan started,\" || text == \"...scanning WiFi..\" || text == \"ERROR ON LAST REQU\") { out('WiFi scanner in progress...'); window.setTimeout(function(){get('/wifiscanresult', wifiP);},1000);}else{out(t);}};\n</script>");
+    server.sendContent("<script>\nfunction out(t) {var el=document.getElementById('app-output');el.innerText=(t+\"\\n----------\\n\"+el.innerText);};\nfunction get(uri,cb) {var xhr=new XMLHttpRequest();xhr.onreadystatechange=function(){if(xhr.readyState==4){if (xhr.status>=200 && xhr.status<300){cb(xhr.response+\"\\n\");}else{cb(\"ERROR ON LAST REQUEST\\n\");}}};xhr.responseType='text';xhr.timeout=10000;xhr.open(\"GET\", uri, true);xhr.send();}\n</script>");
     yield();
     server.sendContent("</head><body><h2>Toolbox for ESP8266 and ESP32 microcontrollers.</h2>");
     yield();
@@ -337,7 +323,7 @@ void handleDefault() {
         server.sendContent("<p><b>Configuration saved, resetting device</b></p>");
         doReset = 2;    
     }
-    server.sendContent("<br><a href=\"#\" onclick=\"get('/wifiscan', wifiP);\">Scan WiFis</a><br><hr>");
+    server.sendContent("<br><a href=\"#\" onclick=\"get('/wifiscan', out);\">Scan WiFis</a><br><hr>");
     yield();
     server.sendContent("Pin (default 2): <input type=\"number\" id=\"app-pin\" value=\"2\"> <a href=\"#\" onclick=\"get('/blink?pin=' + document.getElementById('app-pin').value, out);\">Blink this pin (stops last pin blinking)</a> - <a href=\"#\" onclick=\"get('/blinkoff', out);\">Stop pin blinking</a><br><hr>");
     yield();
@@ -393,7 +379,6 @@ void setup_web() {
     server.on("/i2cscan", HTTP_GET, handleI2cscan);
 
     server.on("/wifiscan", HTTP_GET, handleWifiScan);
-    server.on("/wifiscanresult", HTTP_GET, handleWifiScanResult);
 
     server.on("/rtcget", HTTP_GET, handleRTCGet);
     server.on("/rtcset", HTTP_GET, handleRTCSet);
@@ -504,11 +489,6 @@ void loop() {
     }
     if (blinking) {
         digitalWrite(blinkPin, blink_status);
-    }
-
-    if (scanStart) {
-        scanStart = false;
-        doWifiScan();
     }
 
     server.handleClient();
