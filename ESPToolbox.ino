@@ -397,7 +397,7 @@ void setup_config() {
     config = new uEspConfigLib(configFs);
 
     config->addOption("wifi_mode", "WiFi mode (C=Client, other=Access Point)", "");
-    config->addOption("wifi_ssid", "WiFi SSID", "ESPToolbox");
+    config->addOption("wifi_ssid", "WiFi SSID", "ESPToolbox", uEspConfigLib_OPTION_SCANNER);
     config->addOption("wifi_password", "WiFi password", "");
     config->addOption("serial_debug", "Enable serial debug (1=enabled, other=disabled)", "");
 
